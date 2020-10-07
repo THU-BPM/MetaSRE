@@ -35,7 +35,7 @@ pip3 install -r requirements.txt
 ```
 ## Usage
 * Run the full model on SemEval dataset with default hyperparameter settings<br>
-```python3 train_SemEval.py```<br>
+```python3 train.py```<br>
 
  
  
