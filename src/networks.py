@@ -12,8 +12,6 @@ class BertForSequenceClassificationUserDefined(BertPreTrainedModel):
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(2 * config.hidden_size, config.hidden_size)
         self.classifier_2 = nn.Linear(config.hidden_size, self.config.num_labels)
-        #self.classifier_3 = nn.Linear(config.hidden_size//2, self.config.num_labels)
-        #self.classifier = nn.Linear(2 * config.hidden_size, self.config.num_labels)
         self.init_weights()
         self.output_emebedding = None
 
@@ -40,9 +38,7 @@ class BertForSequenceClassificationUserDefined(BertPreTrainedModel):
         self.output_emebedding = e_pos_output #e1&e2 cancat output
 
         e_pos_output = self.dropout(e_pos_output)
-        #logits = self.classifier(e_pos_output)
         hidden = self.classifier(e_pos_output)
-        #hidden_1 = self.classifier_2(hidden)
         logits = self.classifier_2(hidden)
 
         outputs = (logits,) + outputs[2:]  # add hidden states and attention if they are here

@@ -20,7 +20,7 @@ from collections import Counter
 
 CUDA = "3,4,5,6"
 DATASET = 'SemEval'  # dataset selection tacred,SemEval
-NUM_LABELS = 19  # 42,19
+NUM_LABELS = 19  # TACRED:42, SemEval:19
 MAX_LENGTH = 128
 BATCH_SIZE = 16
 LR = 1e-4
@@ -29,24 +29,14 @@ EPOCHS = 5  #
 TOTAL_EPOCHS = 1
 MATE_EPOCHS = 10
 seed_val = 19
-UNLABEL_OF_TRAIN = 0.5
-LABEL_OF_TRAIN = 0.1
+UNLABEL_OF_TRAIN = 0.5  # Unlabel ratio
+LABEL_OF_TRAIN = 0.1  # Label ratio
 LAMBD = 0.2
-Z = 10
+Z = 10    # Incremental Epoch Number
 Z_RATIO = Z / BATCH_SIZE
 LOG_DIR = DATASET + '_' + str(int(LABEL_OF_TRAIN * 100)) 
 os.system('mkdir ' + LOG_DIR)
 
-
-# if torch.cuda.is_available():
-#     device = torch.device("cuda:0")
-#     #os.environ['CUDA_VISIBLE_DEVICES'] = CUDA
-#     device1 = torch.device("cuda:1")
-#     print('There are %d GPU(s) available.' % torch.cuda.device_count())
-#     os.environ['CUDA_VISIBLE_DEVICES'] = CUDA
-# else:
-#     print('No GPU available, using the CPU instead.')
-#     device = torch.device("cpu")
 
 os.environ['CUDA_VISIBLE_DEVICES'] = CUDA
 device = torch.device("cuda")
@@ -57,9 +47,6 @@ def flat_accuracy(preds, labels):
     pred_flat = np.argmax(preds, axis=1).flatten()
     labels_flat = labels.flatten()
     non_zero_idx = (labels_flat != 0)
-    # if len(labels_flat[non_zero_idx])==0:
-    #     print("error occur: ", labels_flat)
-    #     return 0
     return np.sum(pred_flat[non_zero_idx] == labels_flat[non_zero_idx]) / len(labels_flat[non_zero_idx])
 
 
@@ -191,19 +178,10 @@ def main(argv=None):
     train_dataset = pre_processing(sentence_train, sentence_train_label)
 
     # split training data to labeled set and unlabeled set
-    # labeled_dataset, unlabeled_dataset_total = random_split(train_dataset, [int(LABEL_OF_TRAIN * len(train_dataset)),
-    #                                                                         len(train_dataset) -
-    #                                                                         int(LABEL_OF_TRAIN * len(train_dataset))])
     labeled_dataset, unlabeled_dataset_total = stratified_sample(train_dataset, LABEL_OF_TRAIN)
 
     unlabeled_dataset = []
     for i in range(MATE_EPOCHS):
-        # unlabeled_dataset_now, unlabeled_dataset_total = random_split(unlabeled_dataset_total,
-        #                                                               [int(UNLABEL_OF_TRAIN / MATE_EPOCHS * len(
-        #                                                                   train_dataset)),
-        #                                                                len(unlabeled_dataset_total) - int(
-        #                                                                    UNLABEL_OF_TRAIN / MATE_EPOCHS * len(
-        #                                                                        train_dataset))])
         unlabeled_dataset_now, unlabeled_dataset_total = stratified_sample(unlabeled_dataset_total,
                                                                            UNLABEL_OF_TRAIN / MATE_EPOCHS)
         unlabeled_dataset.append(unlabeled_dataset_now)
@@ -243,7 +221,6 @@ def main(argv=None):
     )
 
     modelf1 = nn.DataParallel(modelf1)
-    # modelf1.cuda()
     modelf1.to(device)
 
     modelg2 = LabelGeneration.from_pretrained(
@@ -255,7 +232,6 @@ def main(argv=None):
     )
 
     modelg2 = nn.DataParallel(modelg2)
-    # modelg2.cuda()
     modelg2.to(device)
 
     optimizer1 = AdamW(modelf1.parameters(),
@@ -273,9 +249,6 @@ def main(argv=None):
         for j in range(i):
             total_steps1 += len(unlabeled_dataloader[j])
     total_steps1 = total_steps1 * EPOCHS * TOTAL_EPOCHS
-    # total_steps2 = 0
-    # for i in range(MATE_EPOCHS):
-    #     total_steps2 += len(unlabeled_dataloader[i])
     total_steps2 = len(labeled_dataloader) * EPOCHS * MATE_EPOCHS * TOTAL_EPOCHS
 
     # Create the learning rate scheduler.
@@ -330,9 +303,6 @@ def main(argv=None):
                     if step % 40 == 0 and not step == 0:
                         # Calculate elapsed time in minutes.
                         elapsed = format_time(time.time() - t0)
-                        # Report progress.
-                        # print(
-                        #     '  Batch {:>5,}  of  {:>5,}.    Elapsed: {:}.'.format(step, len(train_dataloader), elapsed))
 
                     # Unpack this training batch from our dataloader.
                     b_input_ids = batch[0].to(device)
@@ -408,8 +378,6 @@ def main(argv=None):
                                                  w=b_w)
 
                     # Accumulate the validation loss.
-                    # print(loss.shape)
-                    # print(loss)
                     total_eval_loss += loss.sum().item()
                     # Move logits and labels to CPU
                     logits = logits.detach().cpu().numpy()
@@ -420,9 +388,6 @@ def main(argv=None):
                     all_prediction = np.concatenate((all_prediction, pred_flat), axis=None)
                     all_ground_truth = np.concatenate((all_ground_truth, labels_flat), axis=None)
 
-                # Report the final accuracy for this validation run.
-                # avg_val_accuracy = total_eval_accuracy / len(validation_dataloader)
-                # print("  Accuracy: {0:.4f}".format(avg_val_accuracy))
 
                 # Calculate the average loss over all of the batches.
                 avg_val_loss = total_eval_loss / len(validation_dataloader)
@@ -461,12 +426,6 @@ def main(argv=None):
                     b_e1_pos = batch[3].to(device)
                     b_e2_pos = batch[4].to(device)
                     b_w = batch[5].to(device)
-                    # b1_input_ids = batch[0].to(device)
-                    # b1_input_mask = batch[1].to(device)
-                    # b1_labels = batch[2].to(device)
-                    # b1_e1_pos = batch[3].to(device)
-                    # b1_e2_pos = batch[4].to(device)
-                    # b1_w = batch[5].to(device)
 
                     # f1 predict
                     modelf1.zero_grad()
@@ -567,10 +526,7 @@ def main(argv=None):
             gold_labels = torch.cat(gold_labels, dim=0)
             e1_pos = torch.cat(e1_pos, dim=0)
             e2_pos = torch.cat(e2_pos, dim=0)
-            # w = torch.cat(w, dim=0)
             label_weights, labels = torch.max(probs, dim=1)
-            # labels = torch.argmax(logits, dim=1)
-            # label_weights = torch.max(probs, dim=1)[0]
 
             # evaluate generate label quality
             logits = logits.detach().cpu().numpy()
@@ -584,7 +540,7 @@ def main(argv=None):
             all_weights = np.concatenate((all_weights, pred_weights), axis=None)
 
 
-            # top Z
+            # Pseudo Label Selection, top Z%
             sort = torch.argsort(label_weights, descending=True)
             sort = sort[0:int(len(sort) * Z_RATIO)]
             input_ids = input_ids[sort]
@@ -624,12 +580,6 @@ def main(argv=None):
 
 
             # update training data
-            # input_ids = torch.stack(input_ids).to(device)
-            # input_mask = torch.stack(input_mask).to(device)
-            # labels = torch.tensor(labels, device='cuda')
-            # e1_pos = torch.tensor(e1_pos, device='cuda')
-            # e2_pos = torch.tensor(e2_pos, device='cuda')
-            # w = torch.tensor(w, device='cuda')
             train_add_dataset = train_dataloader.dataset + TensorDataset(input_ids, input_mask, pseudo_labels, e1_pos, e2_pos, w)
             train_dataloader = DataLoader(
                 train_add_dataset,  # The training samples.
@@ -653,10 +603,6 @@ def main(argv=None):
                 if step % 40 == 0 and not step == 0:
                     # Calculate elapsed time in minutes.
                     elapsed = format_time(time.time() - t0)
-                    # Report progress.
-                    # print(
-                    #     '  Batch {:>5,}  of  {:>5,}.    Elapsed: {:}.'.format(step, len(train_dataloader),
-                    #                                                           elapsed))
 
                 # Unpack this training batch from our dataloader.
                 b_input_ids = batch[0].to(device)
@@ -741,13 +687,6 @@ def main(argv=None):
             all_prediction = np.concatenate((all_prediction, pred_flat), axis=None)
             all_ground_truth = np.concatenate((all_ground_truth, labels_flat), axis=None)
 
-            # Calculate the accuracy for this batch of test sentences, and accumulate it over all batches.
-            # acc = flat_accuracy(logits, label_ids)
-            # total_eval_accuracy += acc
-
-        # Report the final accuracy for this validation run.
-        # avg_val_accuracy = total_eval_accuracy / len(validation_dataloader)
-        # print("  Accuracy: {0:.4f}".format(avg_val_accuracy))
 
         # Calculate the average loss over all of the batches.
         avg_val_loss = total_eval_loss / len(validation_dataloader)
@@ -757,33 +696,12 @@ def main(argv=None):
         validation_acc = np.sum(all_prediction[non_zero_idx] == all_ground_truth[non_zero_idx]) / len(all_ground_truth[non_zero_idx])
         validation_f1_score = f1_score(all_ground_truth[non_zero_idx], all_prediction[non_zero_idx], average="micro")
 
-        #print("  Validation Loss: {0:.4f}".format(avg_val_loss))
-        # print("  Validation took: {:}".format(validation_time))
-        #print("  Validation Accuracy: {0:.4f}".format(validation_acc))
-        #print("  Validation F1 score: {0:.4f}".format(validation_f1_score))
-
-        # np.save('prediction{}'.format(cnt), all_prediction)
-        # np.save('label{}'.format(cnt), all_ground_truth)
-        # np.save('nonzero_prediction{}'.format(cnt), all_prediction[non_zero_idx])
-        # np.save('nonzero_label{}'.format(cnt), all_ground_truth[non_zero_idx])
         score(all_ground_truth, all_prediction)
 
     # ----------------------training complete-----------------------
 
     print("Training complete!")
     print("Total training took {:} (h:mm:ss)".format(format_time(time.time() - total_t0)))
-
-    # # Record all statistics from this epoch.
-    # training_stats.append(
-    #     {
-    #         'epoch': epoch_i + 1,
-    #         'Training Loss': avg_train_loss,
-    #         'Valid. Loss': avg_val_loss,
-    #         'Valid. Accur.': avg_val_accuracy,
-    #         'Training Time': training_time,
-    #         'Validation Time': validation_time
-    #     }
-    # )
 
 
 if __name__ == "__main__":
