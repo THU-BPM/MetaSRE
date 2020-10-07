@@ -62,4 +62,9 @@ Then use the scripts from ```data/data_prepare.py``` to further preprocess the d
  
 ## Acknowledgements
 https://github.com/huggingface/transformers
+
 https://github.com/INK-USC/DualRE
+
+## Contact
+
+If you have any problem about our code, feel free to contact: hxm19@mails.tsinghua.edu.cn
